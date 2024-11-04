@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+{% include 'header.html' %}
+<body>
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mt-4">
+        <h1>PRO Dashboard</h1>
+        <a href="{{ url_for('logout') }}" class="btn btn-danger">Logout</a>
+    </div>
+    <h2 class="mt-4">Polling Station: {{ polling_station['NAME'] }}</h2>
+    <form method="POST">
+        <table class="table table-bordered mt-3">
+            <thead>
+            <tr>
+                <th>Time Slot</th>
+                <th>Voting Count</th>
+                <th>Action</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for time_slot in ['9AM', '11AM', '01PM', '03PM', '05PM', 'CLOSE'] %}
+            <tr>
+                <td>{{ time_slot }}</td>
+                <td><input type="number" name="voting_count" class="form-control" required></td>
+                <td>
+                    <button type="submit" name="time_slot" value="{{ time_slot }}" class="btn btn-primary">Update</button>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </form>
+</div>
+</body>
+</html>

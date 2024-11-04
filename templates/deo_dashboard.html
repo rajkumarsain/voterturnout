@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+{% include 'header.html' %}
+<head>
+    <style>
+        /* Fixed table header */
+        .table thead th {
+            position: sticky;
+            top: 0;
+            background-color: #ffffff;
+            z-index: 1;
+        }
+        /* Scrollable body for table */
+        .table-container {
+            max-height: 400px; /* Adjust to show about 10 rows */
+            overflow-y: auto;
+        }
+        /* Fix the footer row to align with columns */
+        .table tfoot {
+            background-color: #f8f9fa;
+            position: sticky;
+            bottom: 0;
+            z-index: 1;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mt-4">
+        <h1>DEO Dashboard</h1>
+        <a href="{{ url_for('logout') }}" class="btn btn-danger">Logout</a>
+    </div>
+
+    <!-- Scrollable table body with fixed header and footer -->
+    <div class="table-container mt-4">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Polling Station</th>
+                    <th>9AM</th>
+                    <th>11AM</th>
+                    <th>1PM</th>
+                    <th>3PM</th>
+                    <th>5PM</th>
+                    <th>Closing</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ps in polling_stations %}
+                <tr>
+                    <td>{{ ps['NAME'] }}</td>
+                    <td>{{ ps['TIME_9AM'] }}</td>
+                    <td>{{ ps['TIME_11AM'] }}</td>
+                    <td>{{ ps['TIME_01PM'] }}</td>
+                    <td>{{ ps['TIME_03PM'] }}</td>
+                    <td>{{ ps['TIME_05PM'] }}</td>
+                    <td>{{ ps['CLOSE'] }}</td>
+                    <td>{{ ps['total_count'] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <!-- Fixed footer row for grand totals -->
+            <tfoot>
+                <tr>
+                    <td><strong>Grand Total</strong></td>
+                    <td>{{ grand_totals['TIME_9AM'] }}</td>
+                    <td>{{ grand_totals['TIME_11AM'] }}</td>
+                    <td>{{ grand_totals['TIME_01PM'] }}</td>
+                    <td>{{ grand_totals['TIME_03PM'] }}</td>
+                    <td>{{ grand_totals['TIME_05PM'] }}</td>
+                    <td>{{ grand_totals['CLOSE'] }}</td>
+                    <td>{{ grand_totals['total_count'] }}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>
