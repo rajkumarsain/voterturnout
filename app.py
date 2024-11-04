@@ -111,8 +111,18 @@ def ro_dashboard():
         connection = get_db_connection()
         cursor = connection.cursor(pymysql.cursors.DictCursor)
 
-        # Fetch polling stations assigned to this RO based on ro_uid in session
-        ro_id = session.get('username')  # Ensure this matches the actual RO uid in user_info
+        # Retrieve ro_id based on username in session
+        username = session.get('username')
+        cursor.execute("SELECT uid FROM user_info WHERE username = %s", (username,))
+        ro_data = cursor.fetchone()
+        
+        if not ro_data:
+            flash("RO ID not found for the current user.")
+            return redirect(url_for('login'))
+        
+        ro_id = ro_data['uid']
+
+        # Fetch polling stations and turnout data
         cursor.execute("""
             SELECT 
                 ps.ps_name AS NAME, 
@@ -129,6 +139,7 @@ def ro_dashboard():
             LEFT JOIN turnout_info ti ON ps.uid = ti.ps_uid
             WHERE ps.ro_uid = %s
         """, (ro_id,))
+        
         polling_stations = cursor.fetchall()
 
         # Calculate time-wise grand totals for each column
@@ -145,6 +156,8 @@ def ro_dashboard():
         connection.close()
         return render_template('ro_dashboard.html', polling_stations=polling_stations, grand_totals=grand_totals)
     return redirect(url_for('login'))
+
+
 
 # Route for the DEO dashboard, allowing DEO to view all polling stations with read-only access to voting counts
 @app.route('/deo_dashboard')

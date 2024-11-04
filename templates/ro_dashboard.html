@@ -29,6 +29,7 @@
     <div class="d-flex justify-content-between align-items-center mt-4">
         <h1>RO Dashboard</h1>
         <h2>Assembly Constituency: {{ session['username'] }}</h2>
+        <a href="{{ url_for('logout') }}" class="btn btn-danger">Logout</a>
     </div>
 
     <!-- Scrollable table body with fixed header and footer -->
@@ -43,7 +44,6 @@
                     <th>3PM Count</th>
                     <th>5PM Count</th>
                     <th>Closing Count</th>
-                    <th>Total</th>
                 </tr>
             </thead>
             <tbody>
@@ -56,7 +56,6 @@
                     <td>{{ ps['TIME_03PM'] | default(0) }}</td>
                     <td>{{ ps['TIME_05PM'] | default(0) }}</td>
                     <td>{{ ps['CLOSE'] | default(0) }}</td>
-                    <td>{{ ps['total_count'] | default(0) }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -70,7 +69,6 @@
                     <td>{{ grand_totals['TIME_03PM'] }}</td>
                     <td>{{ grand_totals['TIME_05PM'] }}</td>
                     <td>{{ grand_totals['CLOSE'] }}</td>
-                    <td>{{ grand_totals['total_count'] }}</td>
                 </tr>
             </tfoot>
         </table>
