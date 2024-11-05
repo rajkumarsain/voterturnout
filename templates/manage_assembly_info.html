@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+{% include 'admin_navbar.html' %}
+<head>
+    <title>Manage Assembly Info</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+<body>
+<div class="container mt-4">
+    <h2 class="text-primary">Manage Assembly Info</h2>
+    <p class="text-warning"><strong>Note:</strong> This page is currently in view-only mode.</p>
+    
+    <!-- Display assembly info in a table format -->
+    <div class="table-responsive">
+        <table class="table table-bordered table-striped mt-3">
+            <thead class="thead-dark">
+                <tr>
+                    <th>State Name</th>
+                    <th>State Code</th>
+                    <th>District Name</th>
+                    <th>District Code</th>
+                    <th>Assembly Name</th>
+                    <th>Assembly Code</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for info in assembly_info %}
+                <tr>
+                    <td>{{ info['state_name'] }}</td>
+                    <td>{{ info['state_code'] }}</td>
+                    <td>{{ info['deo_district_name'] }}</td>
+                    <td>{{ info['deo_district_code'] }}</td>
+                    <td>{{ info['assembly_name'] }}</td>
+                    <td>{{ info['assembly_code'] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.6.0/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>

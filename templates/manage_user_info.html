@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+{% include 'admin_navbar.html' %}
+<head>
+    <title>Manage Users</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        .wrappable-text {
+            white-space: normal;
+            overflow-wrap: break-word;
+        }
+        .table-container {
+            max-height: 400px; /* Scrollable table body */
+            overflow-y: auto;
+        }
+        /* Sticky table headers */
+        .table thead th {
+            position: sticky;
+            top: 0;
+            background-color: #343a40;
+            color: white;
+            z-index: 1;
+        }
+        .dynamic-width {
+        min-width: 150px; /* Minimum width */
+        max-width: 300px; /* Maximum width */
+        width: auto;
+        }
+    </style>
+</head>
+<body>
+<div class="container mt-4">
+    <h2 class="text-primary">Manage Users</h2>
+    
+    <!-- Form to Add New User -->
+    <form method="POST" action="{{ url_for('add_user') }}" class="mb-4">
+        <div class="form-row">
+            <div class="col">
+                <label for="name">Name</label>
+                <input type="text" id="name" name="name" class="form-control" placeholder="Enter Name" required>
+            </div>
+            <div class="col">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" class="form-control" placeholder="Enter Username" required>
+            </div>
+            <div class="col">
+                <label for="user_type">User Type</label>
+                <select id="user_type" name="user_type" class="form-control" required>
+                    <option value="" disabled selected>Select User Type</option>
+                    <option value="DEO">DEO</option>
+                    <option value="RO">RO</option>
+                    <option value="SO">SO</option>
+                    <option value="PRO">PRO</option>
+                </select>
+            </div>
+            <div class="col">
+                <label for="mobile_number">Mobile</label>
+                <input type="text" id="mobile_number" name="mobile_number" class="form-control" placeholder="Enter Mobile Number" required>
+            </div>
+            <div class="col">
+                <label for="password">Password</label>
+                <input type="text" id="password" name="password" class="form-control" placeholder="Enter Password" required>
+            </div>
+            <div class="col align-self-end">
+                <button type="submit" class="btn btn-primary">Add User</button>
+            </div>
+        </div>
+    </form>
+    
+    <!-- User List Table -->
+    <div class="table-container">
+        <table class="table table-bordered table-striped">
+            <thead class="thead-dark">
+                <tr>
+                    <th>S.No</th>
+                    <th>Name</th>
+                    <th>Username</th>
+                    <th>User Type</th>
+                    <th>Mobile</th>
+                    <th>Password</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <form method="POST" action="{{ url_for('update_user', uid=user['uid']) }}">
+                        <td>{{ loop.index }}</td>
+                        <td>
+                            <input type="text" name="name" class="form-control dynamic-width" 
+                                   value="{{ user['name'] }}" required>
+                        </td>
+                        <td><input type="text" name="username" class="form-control" value="{{ user['username'] }}" readonly></td>
+                        <td>
+                            <input type="text" name="user_type" class="form-control" value="{{ user['user_type'] }}" readonly>
+                        </td>
+                        <td><input type="text" name="mobile_number" class="form-control" value="{{ user['mobile_number'] }}" required></td>
+                        <td><input type="text" name="password" class="form-control" value="{{ user['password'] }}" required></td>
+                        <td>
+                            <button type="submit" class="btn btn-success btn-sm">Update</button>
+                            <a href="{{ url_for('delete_user', uid=user['uid']) }}" class="btn btn-danger btn-sm">Delete</a>
+                        </td>
+                    </form>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>

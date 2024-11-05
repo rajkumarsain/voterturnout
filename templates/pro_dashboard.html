@@ -1,13 +1,40 @@
 <!DOCTYPE html>
 <html lang="en">
 {% include 'header.html' %}
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <style>
+        /* Make the table responsive and compact for mobile */
+        .table {
+            font-size: 0.9rem;
+        }
+        .container {
+            padding: 10px;
+        }
+        .header-info {
+            font-size: 1rem;
+        }
+    </style>
+</head>
 <body>
 <div class="container">
-    <div class="d-flex justify-content-between align-items-center mt-4">
-        <h1>PRO Dashboard</h1>
-        <a href="{{ url_for('logout') }}" class="btn btn-danger">Logout</a>
+    <!-- Header with Logout Button -->
+    <div class="d-flex justify-content-between align-items-center mt-2">
+        <h3>PRO Dashboard</h3>
+        <a href="{{ url_for('logout') }}" class="btn btn-danger btn-sm">Logout</a>
     </div>
-    <h2 class="mt-4">Polling Station: {{ polling_station['NAME'] }}</h2>
+
+    <!-- Display top information: State, District, and Assembly Codes -->
+    {% if polling_station %}
+    <div class="header-info mt-3">
+        <p><strong>State Code:</strong> {{ polling_station.state_code }} &nbsp;
+           <strong>District Code:</strong> {{ polling_station.district_code }} &nbsp;
+           <strong>Assembly Code:</strong> {{ polling_station.assembly_code }}</p>
+        <p><strong>Polling Station:</strong> {{ polling_station.NAME }}</p>
+    </div>
+    {% endif %}
+
+    <!-- Turnout Data Update Form -->
     <form method="POST">
         <table class="table table-bordered mt-3">
             <thead>
@@ -18,12 +45,19 @@
             </tr>
             </thead>
             <tbody>
-            {% for time_slot in ['9AM', '11AM', '01PM', '03PM', '05PM', 'CLOSE'] %}
+            {% for time_slot in ['TIME_9AM', 'TIME_11AM', 'TIME_01PM', 'TIME_03PM', 'TIME_05PM', 'CLOSE'] %}
             <tr>
-                <td>{{ time_slot }}</td>
-                <td><input type="number" name="voting_count" class="form-control" required></td>
+                <td>{{ time_slot.replace('TIME_', '').replace('_', ':') }}</td>
                 <td>
-                    <button type="submit" name="time_slot" value="{{ time_slot }}" class="btn btn-primary">Update</button>
+                    <input type="number" name="voting_count_{{ time_slot }}" class="form-control form-control-sm"
+                           value="{{ turnout_data[time_slot] | default('') }}" required
+                           {% if not editable_slots[time_slot] %}disabled{% endif %}>
+                </td>
+                <td>
+                    <button type="submit" name="time_slot" value="{{ time_slot }}" class="btn btn-primary btn-sm"
+                            {% if not editable_slots[time_slot] %}disabled{% endif %}>
+                        Update
+                    </button>
                 </td>
             </tr>
             {% endfor %}
@@ -31,5 +65,7 @@
         </table>
     </form>
 </div>
+
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
 </body>
 </html>

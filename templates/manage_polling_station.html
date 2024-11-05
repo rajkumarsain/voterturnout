@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+{% include 'admin_navbar.html' %}
+<head>
+    <title>Manage Polling Stations</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        /* Container to hold the scrollable table */
+        .table-container {
+            max-height: 400px; /* Show about 10 records at a time */
+            overflow-y: auto;
+        }
+        
+        /* Style for fixed header */
+        .table thead th {
+            position: sticky;
+            top: 0;
+            background-color: #ffffff;
+            z-index: 1;
+        }
+
+        /* Narrow width for PS No */
+        .ps-no-input {
+            max-width: 80px;
+        }
+    </style>
+    <script>
+        // Function to update displayed mobile number when a different PRO is selected
+        function updateMobileNumber(selectElement, mobileNumberId) {
+            const selectedOption = selectElement.options[selectElement.selectedIndex];
+            const mobileNumber = selectedOption.getAttribute('data-mobile');
+            document.getElementById(mobileNumberId).innerText = mobileNumber || "N/A";
+        }
+    </script>
+</head>
+<body>
+<div class="container mt-4">
+    <h2 class="text-primary">Manage Polling Stations</h2>
+
+    <!-- Scrollable table container for displaying polling stations -->
+    <div class="table-container">
+        <table class="table table-bordered table-striped">
+            <thead class="thead-dark">
+                <tr>
+                    <th>PS No</th>
+                    <th>PS Name</th>
+                    <th>PRO</th>
+                    <th>PRO Mobile</th>
+                    <th>Total Voters</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ps in polling_stations %}
+                <tr>
+                    <form method="POST" action="{{ url_for('update_polling_station', ps_uid=ps['ps_uid']) }}">
+                        <td>
+                            <input type="number" name="ps_no" class="form-control ps-no-input" value="{{ ps['ps_no'] }}" maxlength="3">
+                        </td>
+                        <td>
+                            <input type="text" name="ps_name" class="form-control" value="{{ ps['ps_name'] }}">
+                        </td>
+
+                        <!-- PRO Dropdown and Mobile Number Display -->
+                        <td>
+                            <select name="pro_uid" class="form-control" onchange="updateMobileNumber(this, 'pro_mobile_{{ loop.index }}')">
+                                {% for pro in pro_users %}
+                                <option value="{{ pro['uid'] }}" data-mobile="{{ pro['mobile_number'] }}" {% if ps['pro_uid'] == pro['uid'] %}selected{% endif %}>
+                                    {{ pro['name'] }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </td>
+                        <td>
+                            <span id="pro_mobile_{{ loop.index }}">{{ pro_users | selectattr("uid", "equalto", ps['pro_uid']) | map(attribute="mobile_number") | first }}</span>
+                        </td>
+
+                        <!-- Total Voters and Actions -->
+                        <td>
+                            <input type="number" name="total_voter" class="form-control" value="{{ ps['total_voter'] }}">
+                        </td>
+                        <td>
+                            <button type="submit" class="btn btn-success btn-sm">Update</button>
+                            <form method="POST" action="{{ url_for('delete_polling_station', ps_uid=ps['ps_uid']) }}" style="display:inline;">
+                                <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                            </form>
+                        </td>
+                    </form>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>

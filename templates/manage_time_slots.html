@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+{% include 'admin_navbar.html' %}
+<head>
+    <title>Manage Time Slots</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+<body>
+<div class="container mt-4">
+    <h2>Manage Time Slots</h2>
+
+    <!-- Form to Add a New Time Slot -->
+    <form method="POST" action="{{ url_for('manage_time_slots') }}">
+        <div class="form-row">
+            <div class="col">
+                <input type="text" name="slot_name" class="form-control" placeholder="Time Slot Name" required>
+            </div>
+            <div class="col">
+                <input type="number" name="slot_hour" class="form-control" placeholder="Start Hour" min="0" max="23" required>
+            </div>
+            <div class="col">
+                <input type="number" name="slot_minute" class="form-control" placeholder="Start Minute" min="0" max="59" required>
+            </div>
+            <div class="col">
+                <input type="number" name="edit_interval" class="form-control" placeholder="Edit Interval (min)" min="1" required>
+            </div>
+            <div class="col">
+                <button type="submit" name="add_time_slot" class="btn btn-primary">Add Time Slot</button>
+            </div>
+        </div>
+    </form>
+
+    <!-- Table to Display and Edit Time Slots -->
+    <table class="table table-bordered mt-4">
+        <thead>
+            <tr>
+                <th>Time Slot Name</th>
+                <th>Start Hour</th>
+                <th>Start Minute</th>
+                <th>Edit Interval (Minutes)</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for slot in time_slots %}
+            <tr>
+                <form method="POST" action="{{ url_for('update_time_slot', id=slot['id']) }}">
+                    <td>
+                        <input type="text" name="slot_name" class="form-control" value="{{ slot['slot_name'] }}" required>
+                    </td>
+                    <td>
+                        <input type="number" name="slot_hour" class="form-control" min="0" max="23" value="{{ slot['slot_hour'] }}" required>
+                    </td>
+                    <td>
+                        <input type="number" name="slot_minute" class="form-control" min="0" max="59" value="{{ slot['slot_minute'] }}" required>
+                    </td>
+                    <td>
+                        <input type="number" name="edit_interval" class="form-control" min="1" value="{{ slot['edit_interval'] }}" required>
+                    </td>
+                    <td>
+                        <button type="submit" class="btn btn-success btn-sm">Update</button>
+                    </td>
+                </form>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} mt-3">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+</div>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>
