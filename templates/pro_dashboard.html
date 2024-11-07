@@ -3,69 +3,73 @@
 {% include 'header.html' %}
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <style>
-        /* Make the table responsive and compact for mobile */
-        .table {
-            font-size: 0.9rem;
+
+    <script>
+        function validateCounts() {
+            const timeSlots = {{ time_slots_data | tojson }};
+            let lastNonZeroCount = 0;
+
+            for (const slot of timeSlots) {
+                const slotName = slot.slot_name;
+                const countField = document.getElementById(`voting_count_${slotName}`);
+                if (countField) {
+                    const countValue = parseInt(countField.value) || 0;
+
+                    if (countValue !== 0 && countValue < lastNonZeroCount) {
+                        alert(`Number of Votes must be greater than or equal to number of Voter entered in previous time slot`);
+                        countField.focus();
+                        return false;
+                    }
+
+                    if (countValue > 0) {
+                        lastNonZeroCount = countValue;
+                    }
+                }
+            }
+            return true;
         }
-        .container {
-            padding: 10px;
-        }
-        .header-info {
-            font-size: 1rem;
-        }
-    </style>
+    </script>
 </head>
 <body>
-<div class="container">
-    <!-- Header with Logout Button -->
+<div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mt-2">
-        <h3>PRO Dashboard</h3>
-        <a href="{{ url_for('logout') }}" class="btn btn-danger btn-sm">Logout</a>
-    </div>
+        <h4>PRO Dashboard</h4>
+         </div>
 
-    <!-- Display top information: State, District, and Assembly Codes -->
-    {% if polling_station %}
-    <div class="header-info mt-3">
-        <p><strong>State Code:</strong> {{ polling_station.state_code }} &nbsp;
-           <strong>District Code:</strong> {{ polling_station.district_code }} &nbsp;
-           <strong>Assembly Code:</strong> {{ polling_station.assembly_code }}</p>
-        <p><strong>Polling Station:</strong> {{ polling_station.NAME }}</p>
-    </div>
-    {% endif %}
-
-    <!-- Turnout Data Update Form -->
-    <form method="POST">
+    
+    <form method="POST" onsubmit="return validateCounts();">
         <table class="table table-bordered mt-3">
             <thead>
-            <tr>
-                <th>Time Slot</th>
-                <th>Voting Count</th>
-                <th>Action</th>
-            </tr>
+                <tr>
+                    <th>Time Slot</th>
+                    <th>Voting Count</th>
+                    <th>Action</th>
+                </tr>
             </thead>
             <tbody>
-            {% for time_slot in ['TIME_9AM', 'TIME_11AM', 'TIME_01PM', 'TIME_03PM', 'TIME_05PM', 'CLOSE'] %}
-            <tr>
-                <td>{{ time_slot.replace('TIME_', '').replace('_', ':') }}</td>
-                <td>
-                    <input type="number" name="voting_count_{{ time_slot }}" class="form-control form-control-sm"
-                           value="{{ turnout_data[time_slot] | default('') }}" required
-                           {% if not editable_slots[time_slot] %}disabled{% endif %}>
-                </td>
-                <td>
-                    <button type="submit" name="time_slot" value="{{ time_slot }}" class="btn btn-primary btn-sm"
-                            {% if not editable_slots[time_slot] %}disabled{% endif %}>
-                        Update
-                    </button>
-                </td>
-            </tr>
-            {% endfor %}
+                {% for slot in time_slots_data %}
+                <tr>
+                    <td>{{ slot.slot_name }}</td>
+                    <td>
+                        <input type="number" id="voting_count_{{ slot.slot_name }}" 
+                               name="voting_count_{{ slot.slot_name }}" 
+                               class="form-control form-control-sm"
+                               value="{{ turnout_data[slot.slot_name] | default('') }}" required
+                               {% if not editable_slots[slot.slot_name] %}disabled{% endif %}>
+                    </td>
+                    <td>
+                        <button type="submit" name="time_slot" value="{{ slot.slot_name }}" class="btn btn-primary btn-sm"
+                                {% if not editable_slots[slot.slot_name] %}disabled{% endif %}>
+                            Update
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
             </tbody>
         </table>
     </form>
 </div>
 
-<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
 </body>
 </html>

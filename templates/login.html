@@ -5,11 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
     <title>Login</title>
+    <style>
+        body {
+            background-image: url("{{ url_for('static', filename='images/login_background.jpg') }}");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+        }
+        .login-box {
+            background-color: rgba(255, 255, 255, 0.8); /* White background with transparency */
+            padding: 20px;
+            border-radius: 8px;
+            width: 300px; /* Smaller box width */
+            margin-top: 100px;
+            margin-left: auto; /* Aligns to the right */
+        }
+    </style>
 </head>
 <body>
 <div class="container">
-    <div class="row justify-content-center">
-        <div class="col-md-4 mt-5">
+    <div class="row justify-content-end"> <!-- Shifts the row to the right -->
+        <div class="login-box">
             <h2 class="text-center">Login</h2>
             <form method="POST" action="{{ url_for('login') }}">
                 <div class="form-group">

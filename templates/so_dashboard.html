@@ -2,99 +2,51 @@
 <html lang="en">
 {% include 'header.html' %}
 <head>
-    <style>
-        /* Styling for compact, mobile-friendly view */
-        .table-container {
-            overflow-x: auto;
-            white-space: nowrap;
-        }
-        .compact-input {
-            width: 80px; /* Compact width for inputs */
-            padding: 4px;
-        }
-        .compact-btn {
-            padding: 4px 8px;
-            font-size: 0.85em;
-        }
-        /* Allow PS Name to wrap within the cell */
-        .wrap-text {
-            white-space: normal;
-        }
-    </style>
+
 </head>
 <body>
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mt-3">
-        <h5 class="text-primary">SO Dashboard</h5>
-        <a href="{{ url_for('logout') }}" class="btn btn-sm btn-danger compact-btn">Logout</a>
+        <h4>SO Dashboard<h4>
     </div>
 
-    <!-- Display top information in a compact row -->
-    {% if top_info %}
-    <div class="mt-3">
-        <p><small><strong>State Code:</strong> {{ top_info.state_code }} &nbsp; 
-            <strong>District Code:</strong> {{ top_info.district_code }} &nbsp;
-            <strong>Assembly Code:</strong> {{ top_info.assembly_code }}</small></p>
-    </div>
-    {% endif %}
-
-    <form method="POST">
-        <div class="table-container mt-3">
-            <table class="table table-sm table-striped table-bordered">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>PS No</th>
-                        <th>PS Name</th>
-                        <th>9AM</th>
-                        <th>11AM</th>
-                        <th>1PM</th>
-                        <th>3PM</th>
-                        <th>5PM</th>
-                        <th>Close</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for ps in polling_stations %}
-                    <tr>
-                        <td>{{ loop.index }}</td>
-                        <td>{{ ps['ps_no'] }}</td>
-                        <td class="wrap-text">{{ ps['NAME'] }}</td> <!-- Allow wrapping -->
-                        {% for time_slot in ['TIME_9AM', 'TIME_11AM', 'TIME_01PM', 'TIME_03PM', 'TIME_05PM', 'CLOSE'] %}
-                        <td>
-                            <input type="number" name="voting_count_{{ ps['ps_uid'] }}_{{ time_slot }}" 
-                                   class="form-control form-control-sm compact-input"
-                                   value="{{ ps[time_slot] | default(0) }}"
-                                   {% if not editable_slots.get(time_slot) %}disabled{% endif %}>
-                        </td>
-                        {% endfor %}
-                        <td>
-                            <button type="submit" name="ps_uid" value="{{ ps['ps_uid'] }}" 
-                                    class="btn btn-primary btn-sm compact-btn">
-                                Update
-                            </button>
-                        </td>
-                    </tr>
+    <div class="table-container mt-3">
+        <table class="table table-sm table-striped table-bordered">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>PS No</th>
+                    <th>PS Name</th>
+                    {% for slot in time_slots %}
+                    <th>{{ slot.slot_name }}</th>
                     {% endfor %}
-                </tbody>
-                <!-- Grand Total row -->
-                <tfoot>
-                    <tr>
-                        <td colspan="3"><strong>Grand Total</strong></td>
-                        <td>{{ grand_totals['TIME_9AM'] }}</td>
-                        <td>{{ grand_totals['TIME_11AM'] }}</td>
-                        <td>{{ grand_totals['TIME_01PM'] }}</td>
-                        <td>{{ grand_totals['TIME_03PM'] }}</td>
-                        <td>{{ grand_totals['TIME_05PM'] }}</td>
-                        <td>{{ grand_totals['CLOSE'] }}</td>
-                        <td></td> <!-- For Action column -->
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
-    </form>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ps in polling_stations %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ ps['ps_no'] }}</td>
+                    <td class="wrap-text">{{ ps['NAME'] }}</td>
+                    {% for slot in time_slots %}
+                    <td>
+                        <span>{{ ps.get(slot.slot_name, 0) }}</span>
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="3"><strong>Grand Total</strong></td>
+                    {% for slot in time_slots %}
+                    <td>{{ grand_totals[slot.slot_name] }}</td>
+                    {% endfor %}
+                </tr>
+            </tfoot>
+        </table>
+    </div>
 </div>
-<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
 </body>
 </html>

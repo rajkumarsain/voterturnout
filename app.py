@@ -62,16 +62,77 @@ def login():
             flash('Invalid credentials')
     return render_template('login.html')
 
-#ROUTE FOR PRO DASHBOARD
-from datetime import datetime, timedelta  # Import the classes directly from datetime module
+# Route to fetch top information based on user's session data for header
+# Route to fetch top information based on user's session data for header
+def get_top_info():
+    connection = get_db_connection()
+    cursor = connection.cursor(pymysql.cursors.DictCursor)
 
+    # Determine user's role and retrieve relevant codes
+    user_type = session.get('user_type')
+    username = session.get('username')
+
+    # Build the main query for state, district, and assembly information
+    cursor.execute("""
+        SELECT 
+            COALESCE(ai.state_name, '') AS state_name, 
+            COALESCE(ai.state_code, u.state_no) AS state_code, 
+            COALESCE(ai.deo_district_name, '') AS district_name, 
+            COALESCE(ai.deo_district_code, u.pc_no) AS district_code,
+            CASE 
+                WHEN u.ac_no != 'no' THEN COALESCE(ai.assembly_name, '') 
+                ELSE '' 
+            END AS assembly_name,
+            CASE 
+                WHEN u.ac_no != 'no' THEN COALESCE(ai.assembly_code, '') 
+                ELSE '' 
+            END AS assembly_code
+        FROM user_info u
+        LEFT JOIN assembly_info ai ON u.state_no = ai.state_code 
+                                    AND u.pc_no = ai.deo_district_code 
+                                    AND (u.ac_no = ai.assembly_code OR u.ac_no = 'no')
+        WHERE u.username = %s
+    """, (username,))
+
+    top_info = cursor.fetchone()
+
+    if not top_info:
+        connection.close()
+        return {}
+
+    # Check if user is PRO to retrieve polling station information
+    polling_station_name = ""
+    if user_type == 'PRO':
+        cursor.execute("""
+            SELECT ps_name 
+            FROM polling_station_info 
+            WHERE pro_uid = (SELECT uid FROM user_info WHERE username = %s)
+        """, (username,))
+        ps_data = cursor.fetchone()
+        if ps_data:
+            polling_station_name = ps_data['ps_name']
+
+    # Format top_info for display, including polling station if available
+    top_info = {
+        "state": f"{top_info['state_name']} ({top_info['state_code']})",
+        "district": f"{top_info['district_name']} ({top_info['district_code']})",
+        "assembly": f"{top_info['assembly_name']} ({top_info['assembly_code']})" if top_info['assembly_code'] else "",
+        "ps_name": polling_station_name
+    }
+
+    connection.close()
+    return top_info
+
+#ROUTE FOR PRO DASHBOARD
+from datetime import datetime, timedelta
 @app.route('/pro_dashboard', methods=['GET', 'POST'])
 def pro_dashboard():
     if 'user_type' in session and session['user_type'] == 'PRO':
+        top_info = get_top_info()
         connection = get_db_connection()
         cursor = connection.cursor(pymysql.cursors.DictCursor)
 
-        # Retrieve the PRO's `uid`
+        # Retrieve the PRO's uid
         cursor.execute("SELECT uid FROM user_info WHERE username = %s", (session['username'],))
         pro_user = cursor.fetchone()
 
@@ -98,75 +159,59 @@ def pro_dashboard():
             connection.close()
             return redirect(url_for('login'))
 
-        # Determine editable time slots based on `time_slots` table
-        current_time = datetime.now()  # Correct usage here
+        # Retrieve editable time slots from the time_slots table
+        current_time = datetime.now()
         editable_slots = {}
-        
-        # Query all time slots from the database
-        cursor.execute("SELECT slot_name, slot_hour, slot_minute, edit_interval FROM time_slots")
+
+        cursor.execute("SELECT slot_name, slot_hour, slot_minute, edit_interval FROM time_slots ORDER BY slot_hour, slot_minute")
         time_slots_data = cursor.fetchall()
 
+        # Determine which slots are currently editable
         for slot in time_slots_data:
-            # Properly reference datetime to create time slots
-            slot_time = datetime(current_time.year, current_time.month, current_time.day,
-                                 slot['slot_hour'], slot['slot_minute'])
+            slot_time = datetime(current_time.year, current_time.month, current_time.day, slot['slot_hour'], slot['slot_minute'])
             end_time = slot_time + timedelta(minutes=slot['edit_interval'])
             editable_slots[slot['slot_name']] = (slot_time <= current_time <= end_time)
 
         # Handle form submission for updating voting count
         if request.method == 'POST':
-            # Retrieve time slot and voting count values
             time_slot = request.form.get('time_slot')
-            voting_count_key = f"voting_count_{time_slot}"  # Example: voting_count_TIME_9AM
+            voting_count_key = f"voting_count_{time_slot}"
             voting_count = request.form.get(voting_count_key)
 
-            # Debugging output to verify data received from the form
-            print("Received Time Slot:", time_slot)
-            print("Voting Count from form:", voting_count)
-
-            if voting_count and time_slot in editable_slots:
+            if voting_count and time_slot in editable_slots and editable_slots[time_slot]:
                 try:
-                    # Convert voting_count to integer
                     voting_count = int(voting_count)
-                    print("Converted Voting Count:", voting_count)
-
-                    # Execute update query for specific time slot
-                    update_query = f"UPDATE turnout_info SET {time_slot} = %s WHERE ps_uid = %s"
-                    cursor.execute(update_query, (voting_count, polling_station['ps_uid']))
+                    cursor.execute(f"UPDATE turnout_info SET {time_slot} = %s WHERE ps_uid = %s", (voting_count, polling_station['ps_uid']))
                     connection.commit()
                     flash(f'{time_slot} voting count updated successfully to {voting_count}.')
-
-                    # Verify the update
-                    cursor.execute("SELECT * FROM turnout_info WHERE ps_uid = %s", (polling_station['ps_uid'],))
-                    updated_data = cursor.fetchone()
-                    print("Updated turnout data in database:", updated_data)
-
                 except ValueError:
                     flash("Invalid voting count entered. Please enter a valid number.")
             else:
-                flash("Invalid form submission or time slot has passed.")
+                flash("Time slot is either invalid or not currently editable.")
 
         # Retrieve updated turnout data for display on the page
         cursor.execute("SELECT * FROM turnout_info WHERE ps_uid = %s", (polling_station['ps_uid'],))
         turnout_data = cursor.fetchone()
-        print("Turnout Data Displayed to User:", turnout_data)
 
         connection.close()
-
         return render_template(
             'pro_dashboard.html', 
             polling_station=polling_station, 
             turnout_data=turnout_data,
-            editable_slots=editable_slots
+            time_slots_data=time_slots_data,  # Pass the time slot data
+            editable_slots=editable_slots,
+            top_info = top_info  # Pass the editable status of each slot
         )
     return redirect(url_for('login'))
 
 
+
+
 # Route for the SO dashboard, displaying polling stations assigned to the SO and allowing updates with time restrictions
-from datetime import datetime, timedelta
-@app.route('/so_dashboard', methods=['GET', 'POST'])
+@app.route('/so_dashboard')
 def so_dashboard():
     if 'user_type' in session and session['user_type'] == 'SO':
+        top_info = get_top_info()
         connection = get_db_connection()
         cursor = connection.cursor(pymysql.cursors.DictCursor)
 
@@ -182,57 +227,14 @@ def so_dashboard():
         
         polling_stations = cursor.fetchall()
 
-        # Fetch time slots from database for determining editable slots
-        cursor.execute("SELECT slot_name, slot_hour, slot_minute, edit_interval FROM time_slots")
+        # Retrieve the time slots from the database (view-only, so no editable slots)
+        cursor.execute("SELECT slot_name FROM time_slots")
         time_slots_data = cursor.fetchall()
-
-        current_time = datetime.now()
-        editable_slot = None
-
-        # Determine the single editable slot based on the current time
-        for slot in time_slots_data:
-            slot_time = datetime(current_time.year, current_time.month, current_time.day,
-                                 slot['slot_hour'], slot['slot_minute'])
-            end_time = slot_time + timedelta(minutes=slot['edit_interval'])
-            if slot_time <= current_time <= end_time:
-                editable_slot = slot['slot_name']
-                break  # Only one slot should be editable at a time
-
-        # Handle form submission for updating voting count
-        if request.method == 'POST' and editable_slot:
-            ps_uid = request.form.get('ps_uid')
-            voting_count = request.form.get(f'voting_count_{ps_uid}_{editable_slot}')
-
-            if voting_count:
-                try:
-                    voting_count = int(voting_count)
-                    update_query = f"UPDATE turnout_info SET {editable_slot} = %s WHERE ps_uid = %s"
-                    cursor.execute(update_query, (voting_count, ps_uid))
-                    connection.commit()
-                    flash(f'Voting count for {editable_slot} updated successfully for Polling Station {ps_uid}.')
-
-                except ValueError:
-                    flash("Invalid voting count entered. Please enter a valid number.")
-
-        # Re-fetch polling stations to display updated data
-        cursor.execute("""
-            SELECT ps.ps_no, ps.ps_name AS NAME, ps.ps_uid,
-                   ti.TIME_9AM, ti.TIME_11AM, ti.TIME_01PM, ti.TIME_03PM, ti.TIME_05PM, ti.CLOSE
-            FROM polling_station_info ps
-            LEFT JOIN turnout_info ti ON ps.ps_uid = ti.ps_uid
-            JOIN user_info u ON ps.so_uid = u.uid
-            WHERE u.username = %s
-        """, (so_id,))
-        polling_stations = cursor.fetchall()
 
         # Calculate grand totals
         grand_totals = {
-            'TIME_9AM': sum(ps['TIME_9AM'] for ps in polling_stations if ps['TIME_9AM'] is not None),
-            'TIME_11AM': sum(ps['TIME_11AM'] for ps in polling_stations if ps['TIME_11AM'] is not None),
-            'TIME_01PM': sum(ps['TIME_01PM'] for ps in polling_stations if ps['TIME_01PM'] is not None),
-            'TIME_03PM': sum(ps['TIME_03PM'] for ps in polling_stations if ps['TIME_03PM'] is not None),
-            'TIME_05PM': sum(ps['TIME_05PM'] for ps in polling_stations if ps['TIME_05PM'] is not None),
-            'CLOSE': sum(ps['CLOSE'] for ps in polling_stations if ps['CLOSE'] is not None),
+            slot['slot_name']: sum(ps.get(slot['slot_name'], 0) or 0 for ps in polling_stations)
+            for slot in time_slots_data
         }
 
         connection.close()
@@ -240,61 +242,121 @@ def so_dashboard():
             'so_dashboard.html', 
             polling_stations=polling_stations, 
             grand_totals=grand_totals,
-            editable_slots={editable_slot: True} if editable_slot else {}
+            time_slots=time_slots_data,  # Pass the time_slots_data to template
+            top_info=top_info  # Pass the top_info to the template
         )
     return redirect(url_for('login'))
 
-# Route for the RO dashboard, displaying polling stations in the RO's Assembly Constituency and allowing updates with time restrictions
-@app.route('/ro_dashboard')
+# Route for the RO dashboard with enhanced validation
+@app.route('/ro_dashboard', methods=['GET', 'POST'])
 def ro_dashboard():
     if 'user_type' in session and session['user_type'] == 'RO':
+        error_message = None  # Initialize error message variable
+
+        # Placeholder for grand totals, percentages, and progress
+        grand_totals = {}
+        grand_totals_percentages = {}
+        progress_percentages = {}
+
+        # Existing code to get user and data
+        top_info = get_top_info()
         connection = get_db_connection()
         cursor = connection.cursor(pymysql.cursors.DictCursor)
-
-        # Retrieve ro_id based on username in session
+        
         username = session.get('username')
         cursor.execute("SELECT uid FROM user_info WHERE username = %s", (username,))
         ro_data = cursor.fetchone()
-        
-        if not ro_data:
-            flash("RO ID not found for the current user.")
-            return redirect(url_for('login'))
-        
-        ro_id = ro_data['uid']
 
+        if not ro_data:
+            return redirect(url_for('login'))
+
+        ro_id = ro_data['uid']
+        
         # Fetch polling stations and turnout data
         cursor.execute("""
-            SELECT 
-                ps.ps_name AS NAME, 
-                ti.TIME_9AM, 
-                ti.TIME_11AM, 
-                ti.TIME_01PM, 
-                ti.TIME_03PM, 
-                ti.TIME_05PM, 
-                ti.CLOSE,
-                (COALESCE(ti.TIME_9AM, 0) + COALESCE(ti.TIME_11AM, 0) + COALESCE(ti.TIME_01PM, 0) +
-                 COALESCE(ti.TIME_03PM, 0) + COALESCE(ti.TIME_05PM, 0) + COALESCE(ti.CLOSE, 0)) AS total_count,
-                ps.ps_uid
+            SELECT ps.ps_no, ps.ps_name AS NAME, ps.total_voter, 
+                   ti.TIME_9AM, ti.TIME_11AM, ti.TIME_01PM, ti.TIME_03PM, 
+                   ti.TIME_05PM, ti.CLOSE, ps.ps_uid
             FROM polling_station_info ps
             LEFT JOIN turnout_info ti ON ps.ps_uid = ti.ps_uid
             WHERE ps.ro_uid = %s
         """, (ro_id,))
         
         polling_stations = cursor.fetchall()
+        slot_sequence = ['TIME_9AM', 'TIME_11AM', 'TIME_01PM', 'TIME_03PM', 'TIME_05PM', 'CLOSE']
 
-        # Calculate time-wise grand totals for each column
-        grand_totals = {
-            'TIME_9AM': sum(ps['TIME_9AM'] for ps in polling_stations if ps['TIME_9AM'] is not None),
-            'TIME_11AM': sum(ps['TIME_11AM'] for ps in polling_stations if ps['TIME_11AM'] is not None),
-            'TIME_01PM': sum(ps['TIME_01PM'] for ps in polling_stations if ps['TIME_01PM'] is not None),
-            'TIME_03PM': sum(ps['TIME_03PM'] for ps in polling_stations if ps['TIME_03PM'] is not None),
-            'TIME_05PM': sum(ps['TIME_05PM'] for ps in polling_stations if ps['TIME_05PM'] is not None),
-            'CLOSE': sum(ps['CLOSE'] for ps in polling_stations if ps['CLOSE'] is not None),
-            'total_count': sum(ps['total_count'] for ps in polling_stations if ps['total_count'] is not None)
+        # Fetch time slots to determine current editable slot
+        cursor.execute("SELECT slot_name, slot_hour, slot_minute, edit_interval FROM time_slots")
+        time_slots_data = cursor.fetchall()
+
+        current_time = datetime.now()
+        editable_slots = {slot['slot_name']: datetime(current_time.year, current_time.month, current_time.day,
+                    slot['slot_hour'], slot['slot_minute']) <= current_time <= datetime(current_time.year, current_time.month, current_time.day,
+                    slot['slot_hour'], slot['slot_minute']) + timedelta(minutes=slot['edit_interval']) for slot in time_slots_data}
+
+        if request.method == 'POST':
+            ps_uid = request.form.get('ps_uid')
+            updated = False
+
+            cursor.execute("SELECT TIME_9AM, TIME_11AM, TIME_01PM, TIME_03PM, TIME_05PM, CLOSE FROM turnout_info WHERE ps_uid = %s", (ps_uid,))
+            current_values = cursor.fetchone() or {}
+
+            for slot_name in slot_sequence:
+                voting_count = request.form.get(f'voting_count_{ps_uid}_{slot_name}')
+                if voting_count and editable_slots.get(slot_name):
+                    try:
+                        voting_count = int(voting_count)
+                        previous_slot_value = current_values[slot_sequence[slot_sequence.index(slot_name) - 1]] if slot_name != 'TIME_9AM' else 0
+                        
+                        if voting_count < previous_slot_value:
+                            error_message = f"Number of Votes must be greater than or equal to number of Voter entered in previous time slot"
+                            return render_template('ro_dashboard.html', polling_stations=polling_stations, error_message=error_message, 
+                                                    grand_totals=grand_totals, grand_totals_percentages=grand_totals_percentages,
+                                                    progress_percentages=progress_percentages, top_info=top_info,
+                                                    editable_slots=editable_slots, time_slots_data=time_slots_data)
+                        
+                        cursor.execute(f"UPDATE turnout_info SET {slot_name} = %s WHERE ps_uid = %s", (voting_count, ps_uid))
+                        updated = True
+                    except ValueError:
+                        error_message = f"Invalid count entered for {slot_name}. Please enter a valid number."
+                        return render_template('ro_dashboard.html', polling_stations=polling_stations, error_message=error_message, 
+                                                grand_totals=grand_totals, grand_totals_percentages=grand_totals_percentages,
+                                                progress_percentages=progress_percentages, top_info=top_info,
+                                                editable_slots=editable_slots, time_slots_data=time_slots_data)
+
+            if updated:
+                connection.commit()
+
+        # Re-fetch and calculate totals, then pass error_message to template
+        cursor.execute("""
+            SELECT ps.ps_no, ps.ps_name AS NAME, ps.total_voter, ti.TIME_9AM, ti.TIME_11AM, ti.TIME_01PM, ti.TIME_03PM, ti.TIME_05PM, ti.CLOSE, ps.ps_uid
+            FROM polling_station_info ps
+            LEFT JOIN turnout_info ti ON ps.ps_uid = ti.ps_uid
+            WHERE ps.ro_uid = %s
+        """, (ro_id,))
+        polling_stations = cursor.fetchall()
+
+        # Calculate grand totals with default values to avoid None errors
+        grand_totals = {slot: sum(ps.get(slot, 0) or 0 for ps in polling_stations) for slot in slot_sequence}
+        grand_totals['total_voter'] = sum(ps.get('total_voter', 0) or 0 for ps in polling_stations)
+
+        # Calculate grand totals percentages with safe handling to avoid rounding None
+        grand_totals_percentages = {
+            slot: round((grand_totals[slot] / grand_totals['total_voter'] * 100), 2) if grand_totals['total_voter'] else 0
+            for slot in slot_sequence
         }
 
+        # Calculate progress percentages with safe handling
+        total_polling_stations = len(polling_stations) if polling_stations else 1
+        progress_percentages = {
+            slot: round((sum(1 for ps in polling_stations if ps.get(slot, 0)) / total_polling_stations * 100), 2)
+            for slot in slot_sequence
+        }
         connection.close()
-        return render_template('ro_dashboard.html', polling_stations=polling_stations, grand_totals=grand_totals)
+        return render_template('ro_dashboard.html', polling_stations=polling_stations, error_message=error_message,
+                               grand_totals=grand_totals, grand_totals_percentages=grand_totals_percentages,
+                               progress_percentages=progress_percentages, top_info=top_info,
+                               editable_slots=editable_slots, time_slots_data=time_slots_data)
     return redirect(url_for('login'))
 
 
@@ -302,40 +364,60 @@ def ro_dashboard():
 # Route for the DEO dashboard, allowing DEO to view all polling stations with read-only access to voting counts
 @app.route('/deo_dashboard')
 def deo_dashboard():
-    if 'user_type' in session and session['user_type'] == 'DEO':
-        connection = get_db_connection()
-        cursor = connection.cursor(pymysql.cursors.DictCursor)
+    # Fetch top info for the header
+    top_info = get_top_info()
+    
+    connection = get_db_connection()
+    cursor = connection.cursor(pymysql.cursors.DictCursor)
+    
+    # Fetch polling stations with voter counts and turnout info
+    cursor.execute("""
+        SELECT 
+            ps.ps_no, ps.ps_name AS NAME, ps.total_voter, 
+            ti.TIME_9AM, ti.TIME_11AM, ti.TIME_01PM, ti.TIME_03PM, ti.TIME_05PM, ti.CLOSE
+        FROM polling_station_info ps
+        LEFT JOIN turnout_info ti ON ps.ps_uid = ti.ps_uid
+    """)
+    polling_stations = cursor.fetchall()
+    
+    # Initialize grand totals and count of non-zero fields for progress calculation
+    grand_totals = {
+        'TIME_9AM': 0, 'TIME_11AM': 0, 'TIME_01PM': 0, 'TIME_03PM': 0, 'TIME_05PM': 0, 'CLOSE': 0, 
+        'total_voter': 0
+    }
+    progress_count = {
+        'TIME_9AM': 0, 'TIME_11AM': 0, 'TIME_01PM': 0, 'TIME_03PM': 0, 'TIME_05PM': 0, 'CLOSE': 0
+    }
+    
+    # Calculate individual percentages, accumulate grand totals, and count non-zero fields
+    for ps in polling_stations:
+        for slot in ['TIME_9AM', 'TIME_11AM', 'TIME_01PM', 'TIME_03PM', 'TIME_05PM', 'CLOSE']:
+            grand_totals[slot] += ps[slot] if ps[slot] else 0
+            if ps[slot]:  # Check if the field has been updated (non-zero)
+                progress_count[slot] += 1
+        grand_totals['total_voter'] += ps['total_voter'] if ps['total_voter'] else 0
+    
+    # Calculate grand total percentages for each slot
+    grand_totals_percentages = {
+        slot: (grand_totals[slot] / grand_totals['total_voter'] * 100) if grand_totals['total_voter'] else 0
+        for slot in ['TIME_9AM', 'TIME_11AM', 'TIME_01PM', 'TIME_03PM', 'TIME_05PM', 'CLOSE']
+    }
 
-        # Fetch data for all polling stations
-        cursor.execute("""
-            SELECT 
-                ps.ps_name AS NAME, 
-                ti.TIME_9AM, 
-                ti.TIME_11AM, 
-                ti.TIME_01PM, 
-                ti.TIME_03PM, 
-                ti.TIME_05PM, 
-                ti.CLOSE,
-                (ti.TIME_9AM + ti.TIME_11AM + ti.TIME_01PM + ti.TIME_03PM + ti.TIME_05PM + ti.CLOSE) AS total_count
-            FROM polling_station_info ps
-            LEFT JOIN turnout_info ti ON ps.ps_uid = ti.ps_uid
-        """)
-        polling_stations = cursor.fetchall()
+    # Calculate progress percentages for each time slot
+    total_polling_stations = len(polling_stations)
+    progress_percentages = {
+        slot: (progress_count[slot] / total_polling_stations * 100) if total_polling_stations else 0
+        for slot in ['TIME_9AM', 'TIME_11AM', 'TIME_01PM', 'TIME_03PM', 'TIME_05PM', 'CLOSE']
+    }
+    
+    connection.close()
+    return render_template('deo_dashboard.html', 
+                           polling_stations=polling_stations, 
+                           grand_totals=grand_totals, 
+                           grand_totals_percentages=grand_totals_percentages,
+                           progress_percentages=progress_percentages,
+                           top_info=top_info)  # Pass top_info to the template
 
-        # Calculate time-wise grand totals
-        grand_totals = {
-            'TIME_9AM': sum(ps['TIME_9AM'] for ps in polling_stations if ps['TIME_9AM'] is not None),
-            'TIME_11AM': sum(ps['TIME_11AM'] for ps in polling_stations if ps['TIME_11AM'] is not None),
-            'TIME_01PM': sum(ps['TIME_01PM'] for ps in polling_stations if ps['TIME_01PM'] is not None),
-            'TIME_03PM': sum(ps['TIME_03PM'] for ps in polling_stations if ps['TIME_03PM'] is not None),
-            'TIME_05PM': sum(ps['TIME_05PM'] for ps in polling_stations if ps['TIME_05PM'] is not None),
-            'CLOSE': sum(ps['CLOSE'] for ps in polling_stations if ps['CLOSE'] is not None),
-            'total_count': sum(ps['total_count'] for ps in polling_stations if ps['total_count'] is not None)
-        }
-
-        connection.close()
-        return render_template('deo_dashboard.html', polling_stations=polling_stations, grand_totals=grand_totals)
-    return redirect(url_for('login'))
 
 
 @app.route('/admin_login', methods=['GET', 'POST'])
@@ -522,10 +604,7 @@ def manage_user_info():
     cursor.execute("SELECT uid, name, username, user_type, mobile_number, password FROM user_info")
     users = cursor.fetchall()
     connection.close()
-    
-    # Debugging output to check if password is being retrieved
-    print("Users data retrieved from database:", users)
-    
+        
     return render_template('manage_user_info.html', users=users)
 
 
@@ -614,4 +693,4 @@ def logout():
 
 # Run the app in debug mode for development purposes
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)

@@ -1,6 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
     <title>Dashboard</title>
+    <style>
+        /* Full-page background image */
+        body {
+            background-image: url('/static/images/login_background.jpg');  /* Path to your background image */
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+        }
+    
+        /* Styling for header container */
+        .header-background {
+            background-color: rgba(0, 0, 0, 0.7); /* Dark overlay for readability */
+            padding: 10px 20px; /* Corrected padding */
+            border-radius: 8px;
+            width: 99%;
+            color: white;
+        }
+    
+        /* Page content styling */
+        .content-container {
+            background-color: rgba(255, 255, 255, 0.85); /* White background with transparency */
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+    
+        /* Common table styling for all dashboards */
+        .table-container {
+            background-color: #ffffff;
+            padding: 10px;
+            border-radius: 8px;
+            max-height: 450px; /* Set a common max height for the table */
+            overflow-y: auto; /* Enable vertical scrolling if content exceeds max height */
+            width: 100%; /* Ensure the table takes up full width */
+        }
+    
+        /* Table styling */
+        .table {
+            width: 100%; /* Full width */
+            color: #333; /* Dark text color for readability */
+        }
+    
+        /* Table headers with slightly opaque black background and white text */
+        .table th {
+            background-color: rgba(0, 0, 0, 0.8);  /* Slightly opaque dark black background */
+            color: #ffffff;                         /* White text */
+            font-size: 12px;                        /* Font size for table header */
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+    
+        /* Table body styling */
+        .table td {
+            font-size: 12px; /* Font size for table data */
+        }
+    
+        .table tbody tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+    
+        .table tbody tr:nth-child(odd) {
+            background-color: #ffffff;
+        }
+    
+        /* Footer styling with slightly opaque black background and white text */
+        .table tfoot {
+            background-color: rgba(0, 0, 0, 0.8);  /* Slightly opaque dark black background */
+            color: #ffffff;                        /* White text for footer */
+            font-size: 12px;                       /* Font size for table footer */
+            position: sticky;
+            bottom: 0;
+            z-index: 2;
+            opacity: 1;                            /* Ensures full opacity, removing transparency */
+        }
+    
+        /* Footer cell styling for bold and clear visibility */
+        .table tfoot td, .table tfoot th {
+            font-weight: bold;
+            padding: 8px;
+            border-top: 2px solid #dee2e6;  /* Adds a top border to separate from content */
+        }
+    </style>
+    
+    
+    
+
+    
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
 </head>
+<body>
+    <!-- Header section with background overlay -->
+    <div class="container-fluid header-background">
+        <div class="d-flex justify-content-between align-items-center mt-3">
+            <div>
+                <h4>VOTER TURNOUT SYSTEM</h4>
+                {% if top_info %}
+                    <p class="mb-0">
+                        State: {{ top_info.state }}&nbsp;&nbsp;
+                        District: {{ top_info.district }}&nbsp;&nbsp;
+                        {% if top_info.assembly %}
+                            Assembly: {{ top_info.assembly }}&nbsp;&nbsp;
+                        {% endif %}
+                        {% if top_info.ps_name %}
+                            <br>Polling Station: {{ top_info.ps_name }}
+                        {% endif %}
+                    </p>
+                {% endif %}
+            </div>
+            <div>
+                <a href="{{ url_for('logout') }}" class="btn btn-danger btn-sm">Logout</a>
+            </div>
+        </div>
+        <hr>
+    </div>
+    
+</body>
+</html>

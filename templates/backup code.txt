@@ -1,0 +1,317 @@
+# Route for the RO dashboard with enhanced validation
+@app.route('/ro_dashboard', methods=['GET', 'POST'])
+def ro_dashboard():
+    if 'user_type' in session and session['user_type'] == 'RO':
+        top_info = get_top_info()
+        connection = get_db_connection()
+        cursor = connection.cursor(pymysql.cursors.DictCursor)
+
+        username = session.get('username')
+        cursor.execute("SELECT uid FROM user_info WHERE username = %s", (username,))
+        ro_data = cursor.fetchone()
+
+        if not ro_data:
+            flash("RO ID not found for the current user.")
+            return redirect(url_for('login'))
+
+        ro_id = ro_data['uid']
+
+        # Fetch polling stations and turnout data
+        cursor.execute("""
+            SELECT 
+                ps.ps_no, ps.ps_name AS NAME, ps.total_voter, 
+                ti.TIME_9AM, ti.TIME_11AM, ti.TIME_01PM, ti.TIME_03PM, ti.TIME_05PM, ti.CLOSE,
+                ps.ps_uid
+            FROM polling_station_info ps
+            LEFT JOIN turnout_info ti ON ps.ps_uid = ti.ps_uid
+            WHERE ps.ro_uid = %s
+        """, (ro_id,))
+        
+        polling_stations = cursor.fetchall()
+
+        # Define slot sequence for checking previous slot counts
+        slot_sequence = ['TIME_9AM', 'TIME_11AM', 'TIME_01PM', 'TIME_03PM', 'TIME_05PM', 'CLOSE']
+        
+        # Fetch time slots to determine current editable slot
+        cursor.execute("SELECT slot_name, slot_hour, slot_minute, edit_interval FROM time_slots")
+        time_slots_data = cursor.fetchall()
+
+        current_time = datetime.now()
+        editable_slots = {}
+        for slot in time_slots_data:
+            slot_time = datetime(current_time.year, current_time.month, current_time.day,
+                                 slot['slot_hour'], slot['slot_minute'])
+            end_time = slot_time + timedelta(minutes=slot['edit_interval'])
+            editable_slots[slot['slot_name']] = slot_time <= current_time <= end_time
+
+        # Handle form submission for updating voting counts
+        if request.method == 'POST':
+            ps_uid = request.form.get('ps_uid')
+            updated = False
+
+            # Fetch current values for the polling station from the database
+            cursor.execute("""
+                SELECT TIME_9AM, TIME_11AM, TIME_01PM, TIME_03PM, TIME_05PM, CLOSE
+                FROM turnout_info WHERE ps_uid = %s
+            """, (ps_uid,))
+            current_values = cursor.fetchone() or {}
+
+            # Initialize last_non_zero_count from previous slots
+            last_non_zero_count = 0
+            for slot_name in slot_sequence:
+                voting_count = request.form.get(f'voting_count_{ps_uid}_{slot_name}')
+
+                if voting_count and editable_slots.get(slot_name):
+                    try:
+                        voting_count = int(voting_count)
+
+                        # Determine the previous slot value
+                        previous_slot_index = slot_sequence.index(slot_name) - 1
+                        previous_slot_name = slot_sequence[previous_slot_index] if previous_slot_index >= 0 else None
+                        previous_slot_value = current_values[previous_slot_name] if previous_slot_name else 0
+
+                        # Print entered and previous slot values for debugging
+                        print(f"Polling Station UID: {ps_uid}")
+                        print(f"Current Slot: {slot_name}, Entered Value: {voting_count}")
+                        print(f"Previous Slot: {previous_slot_name}, Previous Slot Value: {previous_slot_value}")
+
+                        # Compare entered count with the previous slot value
+                        if voting_count < previous_slot_value:
+                            flash(f"Error: {slot_name} count ({voting_count}) must be equal to or greater than the previous slot count ({previous_slot_value}).")
+                            return redirect(url_for('ro_dashboard'))
+
+                        # Update the database with the new value
+                        cursor.execute(f"UPDATE turnout_info SET {slot_name} = %s WHERE ps_uid = %s", 
+                                       (voting_count, ps_uid))
+                        updated = True
+
+                    except ValueError:
+                        flash(f"Invalid count entered for {slot_name}. Please enter a valid number.")
+                        return redirect(url_for('ro_dashboard'))
+
+            if updated:
+                connection.commit()
+                flash(f'Voting counts updated successfully for Polling Station {ps_uid}.')
+
+        # Re-fetch polling stations to display updated data
+        cursor.execute("""
+            SELECT 
+                ps.ps_no, ps.ps_name AS NAME, ps.total_voter, 
+                ti.TIME_9AM, ti.TIME_11AM, ti.TIME_01PM, ti.TIME_03PM, ti.TIME_05PM, ti.CLOSE,
+                ps.ps_uid
+            FROM polling_station_info ps
+            LEFT JOIN turnout_info ti ON ps.ps_uid = ti.ps_uid
+            WHERE ps.ro_uid = %s
+        """, (ro_id,))
+        polling_stations = cursor.fetchall()
+
+        # Calculate grand totals and progress
+        grand_totals = {
+            'TIME_9AM': sum(ps['TIME_9AM'] for ps in polling_stations if ps['TIME_9AM']),
+            'TIME_11AM': sum(ps['TIME_11AM'] for ps in polling_stations if ps['TIME_11AM']),
+            'TIME_01PM': sum(ps['TIME_01PM'] for ps in polling_stations if ps['TIME_01PM']),
+            'TIME_03PM': sum(ps['TIME_03PM'] for ps in polling_stations if ps['TIME_03PM']),
+            'TIME_05PM': sum(ps['TIME_05PM'] for ps in polling_stations if ps['TIME_05PM']),
+            'CLOSE': sum(ps['CLOSE'] for ps in polling_stations if ps['CLOSE']),
+            'total_voter': sum(ps['total_voter'] for ps in polling_stations if ps['total_voter'])
+        }
+        grand_totals_percentages = {
+            slot: (grand_totals[slot] / grand_totals['total_voter'] * 100) if grand_totals['total_voter'] else 0
+            for slot in slot_sequence
+        }
+
+        # Progress count
+        total_polling_stations = len(polling_stations)
+        progress_percentages = {
+            slot: (sum(1 for ps in polling_stations if ps[slot]) / total_polling_stations * 100) if total_polling_stations else 0
+            for slot in slot_sequence
+        }
+
+        connection.close()
+        return render_template(
+            'ro_dashboard.html', 
+            polling_stations=polling_stations, 
+            grand_totals=grand_totals, 
+            grand_totals_percentages=grand_totals_percentages,
+            progress_percentages=progress_percentages,
+            top_info=top_info,
+            editable_slots=editable_slots,
+            time_slots_data=time_slots_data
+        )
+    return redirect(url_for('login'))
+
+<!DOCTYPE html>
+<html lang="en">
+{% include 'header.html' %}
+<head>
+    <style>
+        .table-container {
+            max-height: 400px;
+            overflow-y: auto;
+            width: 100%;
+        }
+        
+        .table {
+            width: 100%;
+        }
+        
+        .table thead th {
+            position: sticky;
+            top: 0;
+            background-color: #ffffff;
+            z-index: 1;
+            font-size: 14px;
+        }
+
+        .table td {
+            font-size: 11px;
+        }
+
+        .table tfoot {
+            background-color: #f8f9fa;
+            position: sticky;
+            bottom: 0;
+            z-index: 1;
+            font-size: 14px;
+        }
+    </style>
+    <script>
+        function validateCounts() {
+            const slotSequence = ['TIME_9AM', 'TIME_11AM', 'TIME_01PM', 'TIME_03PM', 'TIME_05PM', 'CLOSE'];
+            const rows = document.querySelectorAll("tbody tr");
+    
+            for (const row of rows) {
+                let lastNonZeroCount = 0;
+    
+                // Loop over each slot in the sequence for this polling station
+                for (const slotName of slotSequence) {
+                    const inputField = row.querySelector(`input[name="voting_count_${row.dataset.psUid}_${slotName}"]`);
+                    
+                    if (inputField && !inputField.disabled) {
+                        const countValue = parseInt(inputField.value) || 0;
+    
+                        // If the entered count is less than the last non-zero count, show the modal and prevent submission
+                        if (countValue !== 0 && countValue < lastNonZeroCount) {
+                            // Set the message in the modal body
+                            document.getElementById("validationModalBody").textContent = 
+                                `The count for ${slotName} must be equal to or greater than the previous slot.`;
+    
+                            // Show the modal
+                            $('#validationModal').modal('show');
+                            
+                            inputField.focus();
+                            return false;  // Prevent form submission
+                        }
+    
+                        // Update the lastNonZeroCount if current value is non-zero
+                        if (countValue > 0) {
+                            lastNonZeroCount = countValue;
+                        }
+                    }
+                }
+            }
+            return true;  // Allow form submission if all validations pass
+        }
+    </script>
+</head>
+<body>
+    <!-- Warning Modal -->
+    <div class="modal fade" id="validationModal" tabindex="-1" aria-labelledby="validationModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="validationModalLabel">Invalid Input</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body" id="validationModalBody">
+                    <!-- Error message will be injected here by JavaScript -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mt-4">
+        <h1>RO Dashboard</h1>
+    </div>
+
+    <form method="POST" action="{{ url_for('ro_dashboard') }}" onsubmit="return validateCounts();">
+        <div class="table-container mt-4">
+            <table class="table table-bordered table-striped">
+                <thead>
+                    <tr>
+                        <th>S.No</th>
+                        <th>Polling Station Name</th>
+                        <th>9AM</th>
+                        <th>9AM%</th>
+                        <th>11AM</th>
+                        <th>11AM%</th>
+                        <th>1PM</th>
+                        <th>1PM%</th>
+                        <th>3PM</th>
+                        <th>3PM%</th>
+                        <th>5PM</th>
+                        <th>5PM%</th>
+                        <th>Closing</th>
+                        <th>Closing%</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ps in polling_stations %}
+                    <tr data-ps-uid="{{ ps['ps_uid'] }}">
+                        <td>{{ loop.index }}</td>
+                        <td>{{ ps['NAME'] }}</td>
+                        {% for slot in ['TIME_9AM', 'TIME_11AM', 'TIME_01PM', 'TIME_03PM', 'TIME_05PM', 'CLOSE'] %}
+                            <td>
+                                <input type="number" 
+                                       name="voting_count_{{ ps['ps_uid'] }}_{{ slot }}" 
+                                       class="form-control form-control-sm" 
+                                       value="{{ ps[slot] | default(0) }}" 
+                                       min="0"
+                                       {% if not editable_slots.get(slot) %}disabled{% endif %}>
+                            </td>
+                            <td>
+                                {% if ps['total_voter'] %}
+                                    {{ ((ps[slot] / ps['total_voter']) * 100) | round(2) }}%
+                                {% else %}
+                                    0%
+                                {% endif %}
+                            </td>
+                        {% endfor %}
+                        <td>
+                            <button type="submit" name="ps_uid" value="{{ ps['ps_uid'] }}" class="btn btn-primary btn-sm">
+                                Update
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="2"><strong>Grand Total</strong></td>
+                        {% for slot in ['TIME_9AM', 'TIME_11AM', 'TIME_01PM', 'TIME_03PM', 'TIME_05PM', 'CLOSE'] %}
+                            <td>{{ grand_totals[slot] }}</td>
+                            <td>{{ grand_totals_percentages[slot] | round(2) }}%</td>
+                        {% endfor %}
+                        <td></td>
+                    </tr>
+                    <tr>
+                        <td colspan="2"><strong>Progress %</strong></td>
+                        {% for slot in ['TIME_9AM', 'TIME_11AM', 'TIME_01PM', 'TIME_03PM', 'TIME_05PM', 'CLOSE'] %}
+                            <td colspan="2">{{ progress_percentages[slot] | round(2) }}%</td>
+                        {% endfor %}
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </form>
+</div>
+
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>
