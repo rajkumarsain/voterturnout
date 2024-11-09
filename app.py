@@ -63,7 +63,6 @@ def login():
     return render_template('login.html')
 
 # Route to fetch top information based on user's session data for header
-# Route to fetch top information based on user's session data for header
 def get_top_info():
     connection = get_db_connection()
     cursor = connection.cursor(pymysql.cursors.DictCursor)
@@ -72,19 +71,19 @@ def get_top_info():
     user_type = session.get('user_type')
     username = session.get('username')
 
-    # Build the main query for state, district, and assembly information
+    # Main query to fetch state, district, and assembly information
     cursor.execute("""
         SELECT 
-            COALESCE(ai.state_name, '') AS state_name, 
-            COALESCE(ai.state_code, u.state_no) AS state_code, 
-            COALESCE(ai.deo_district_name, '') AS district_name, 
-            COALESCE(ai.deo_district_code, u.pc_no) AS district_code,
+            ai.state_name AS state_name, 
+            u.state_no AS state_code,
+            ai.deo_district_name AS district_name, 
+            u.pc_no AS district_code,
             CASE 
-                WHEN u.ac_no != 'no' THEN COALESCE(ai.assembly_name, '') 
+                WHEN u.ac_no != 'no' THEN ai.assembly_name 
                 ELSE '' 
             END AS assembly_name,
             CASE 
-                WHEN u.ac_no != 'no' THEN COALESCE(ai.assembly_code, '') 
+                WHEN u.ac_no != 'no' THEN ai.assembly_code 
                 ELSE '' 
             END AS assembly_code
         FROM user_info u
@@ -96,11 +95,25 @@ def get_top_info():
 
     top_info = cursor.fetchone()
 
+    # If no result, return empty dictionary after closing connection
     if not top_info:
         connection.close()
         return {}
 
-    # Check if user is PRO to retrieve polling station information
+    # Fall back for DEO-specific details if names are missing
+    if not top_info['state_name'] or not top_info['district_name']:
+        cursor.execute("""
+            SELECT state_name, deo_district_name 
+            FROM assembly_info 
+            WHERE state_code = %s AND deo_district_code = %s
+        """, (top_info['state_code'], top_info['district_code']))
+        
+        fallback_info = cursor.fetchone()
+        if fallback_info:
+            top_info['state_name'] = fallback_info.get('state_name', top_info['state_name'])
+            top_info['district_name'] = fallback_info.get('deo_district_name', top_info['district_name'])
+
+    # Retrieve polling station name if the user is a PRO
     polling_station_name = ""
     if user_type == 'PRO':
         cursor.execute("""
@@ -112,16 +125,18 @@ def get_top_info():
         if ps_data:
             polling_station_name = ps_data['ps_name']
 
-    # Format top_info for display, including polling station if available
+    # Format top_info with state, district, and assembly names and codes
     top_info = {
-        "state": f"{top_info['state_name']} ({top_info['state_code']})",
-        "district": f"{top_info['district_name']} ({top_info['district_code']})",
+        "state": f"{top_info['state_name']} ({top_info['state_code']})" if top_info['state_name'] else f"({top_info['state_code']})",
+        "district": f"{top_info['district_name']} ({top_info['district_code']})" if top_info['district_name'] else f"({top_info['district_code']})",
         "assembly": f"{top_info['assembly_name']} ({top_info['assembly_code']})" if top_info['assembly_code'] else "",
         "ps_name": polling_station_name
     }
 
     connection.close()
     return top_info
+
+
 
 #ROUTE FOR PRO DASHBOARD
 from datetime import datetime, timedelta

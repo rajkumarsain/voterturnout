@@ -9,10 +9,14 @@
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mt-4">
         <h4>DEO Dashboard</h4>
-  
+        
+        <!-- Wrapping the button with a div that has right margin -->
+        <div class="mr-3">
+            <button onclick="printTable()" class="btn btn-info btn-sm">Print</button>  
+        </div>
     </div>
 
-    <div class="table-container mt-4">
+    <div class="table-container mt-4" id="table-content">
         <table class="table table-bordered table-striped">
             <thead>
                 <tr>
@@ -72,7 +76,89 @@
         </table>
     </div>
 </div>
+<script>
+    //function to print the table
+    function printTable() {
+        // Save original page content and styles
+        const originalContent = document.body.innerHTML;
+        const originalStyles = document.head.innerHTML;
 
+        // CSS for print styling, targeting specific cells to force border visibility
+        const printStyles = `
+            <style>
+                @media print {
+                    body, html {
+                        height: 100%;
+                        margin: 0;
+                        padding: 0;
+                        overflow: visible;
+                    }
+                    .table-container {
+                        max-height: none;
+                        overflow: visible;
+                    }
+                    .table {
+                        width: 100%;
+                        page-break-inside: auto;
+                        border-collapse: collapse !important;
+                        border-color: #000 !important; /* Darker border for the entire table */
+                    }
+                    .table th, .table td {
+                        border: 1px solid #000 !important; /* Darker borders */
+                        padding: 8px !important;
+                    }
+                    /* Enforcing specific border visibility */
+                    .table td:nth-child(3),  /* Column after 11AM% */
+                    .table td:nth-child(7),  /* Column after 1PM% */
+                    .table td:nth-child(11) { /* Column after 5PM% */
+                        border-left: 1px solid #000 !important; /* Ensures visible left border for these cells */
+                    }
+                    .table thead th, .table tfoot th {
+                        font-weight: bold !important;
+                        color: #000 !important; /* Black font for headers */
+                        font-size: 12px !important;
+                        background-color: #f2f2f2 !important;
+                    }
+                    .table tfoot {
+                        display: table-row-group;
+                    }
+                    .table tfoot tr {
+                        background-color: #f2f2f2 !important;
+                        color: #000 !important;
+                        font-weight: bold !important;
+                        font-size: 12px !important;
+                    }
+                    /* Hide last column in print */
+                    .table td:last-child, .table th:last-child {
+                        display: none !important;
+                    }
+                    /* Style input fields for print, displaying as plain text */
+                    .table td input {
+                        border: none !important;
+                        outline: none !important;
+                        background: transparent !important;
+                        color: #333 !important;
+                        font-size: 12px !important;
+                        width: 100% !important;
+                        text-align: center !important;
+                        padding: 0 !important;
+                    }
+                }
+            </style>
+        `;
+
+        // Set the print content with applied styles
+        document.head.innerHTML += printStyles;
+        document.body.innerHTML = document.getElementById('table-content').outerHTML;
+
+        // Trigger the print dialog
+        window.print();
+
+        // Restore original content and styles after printing
+        document.body.innerHTML = originalContent;
+        document.head.innerHTML = originalStyles;
+    }
+</script>
 
 </body>
 </html>
